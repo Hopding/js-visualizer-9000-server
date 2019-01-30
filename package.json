@@ -5,5 +5,10 @@
   "license": "MIT",
   "scripts": {
     "start": "node index.js"
+  },
+  "dependencies": {
+    "ast-types": "^0.11.7",
+    "falafel": "^2.1.0",
+    "recast": "^0.16.2"
   }
 }

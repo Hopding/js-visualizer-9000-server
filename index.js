@@ -1,10 +1,22 @@
 const asyncHooks = require('async_hooks');
 const fs = require('fs');
+const falafel = require('falafel');
+const recast = require("recast");
+
+const LOG_FILE = './log.txt';
+
+fs.writeFileSync(LOG_FILE, '');
+
+const log = (...msg) => {
+  fs.appendFileSync(LOG_FILE, msg.join(' ') + '\n');
+}
 
 const init = (asyncId, type, triggerAsyncId, resource) => {
-  // console.log('INIT:', type)
-  const msg = `INIT: ${type}, ${resource.constructor.name}`
-  fs.appendFileSync('./log.txt', msg);
+  const onTimeout = resource._onTimeout;
+  if (onTimeout) {
+    log(`INIT: ${type}, ${resource.constructor.name}, ${Object.getOwnPropertyNames(resource)}`);
+    log('  onTimeout:', onTimeout);
+  }
 }
 
 const eid = asyncHooks.executionAsyncId();
@@ -20,21 +32,57 @@ const asyncHook = asyncHooks.createHook({
 
 asyncHook.enable();
 
-/******************************************************************************/
+const jsSource = String(fs.readFileSync('./source.js'));
 
-function funcOne() { }
-function funcTwo() {
-  funcOne()
-}
+const functionDefinitionTypes = [
+  'FunctionDeclaration',
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+];
 
-function taskOne() { }
-function taskTwo() { }
+const traceBlock = (code, fnName) => `{
+  const idWithExtensionToAvoidConflicts = nextId();
+  FunctionTracer.enter(idWithExtensionToAvoidConflicts, '${fnName}');
+  try {
+    ${code}
+  } catch (e) {
+    FunctionTracer.error(idWithExtensionToAvoidConflicts, '${fnName}');
+  } finally {
+    FunctionTracer.exit(idWithExtensionToAvoidConflicts, '${fnName}');
+  }
+}`
 
-function microtaskOne() { }
-function microtaskTwo() { }
+// TODO: HANDLE IMPLICIT RETURNS FROM ARROW FNS!
+// TODO: HANDLE GENERATORS/ASYNC-AWAIT
+const output = falafel(jsSource, (node) => {
+  const parentType = node.parent && node.parent.type;
+  const isBlockStatement = node.type === 'BlockStatement';
+  const isFunctionBody = functionDefinitionTypes.includes(parentType);
 
-setTimeout(taskOne, 0)
-// Promise.resolve().then(microtaskOne)
-// setTimeout(taskTwo, 5)
-// Promise.resolve().then(microtaskTwo)
-// funcTwo();
+  if (isBlockStatement && isFunctionBody) {
+    const fnName = (node.parent.id && node.parent.id.name) || 'anonymous';
+    const block = node.source();
+    const blockWithoutCurlies = block.substring(1, block.length - 1);
+    node.update(traceBlock(blockWithoutCurlies, fnName))
+  }
+});
+
+const modifiedSource = output.toString();
+
+console.log('=============== Modified Source ===============');
+console.log(modifiedSource);
+console.log('===============================================');
+
+const nextId = (() => {
+  let id = 0;
+  return () => id++;
+})();
+
+const FunctionTracer = {
+  enter: (id, name) => console.log('Enter:', name, 'Id:', id),
+  error: (id, name) => console.log('Error:', name, 'Id:', id),
+  exit: (id, name) => console.log('Exit:', name, 'Id:', id),
+};
+
+const fn = new Function('nextId', 'FunctionTracer', modifiedSource);
+fn(nextId, FunctionTracer);
