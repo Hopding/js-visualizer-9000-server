@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "ast-types": "^0.11.7",
+    "babel-core": "^6.26.3",
     "falafel": "^2.1.0",
     "lodash": "^4.17.11",
     "node-fetch": "^2.3.0",

@@ -2,18 +2,21 @@ const { parentPort, workerData } = require('worker_threads');
 const asyncHooks = require('async_hooks');
 const util = require('util');
 const fs = require('fs');
+const babel = require('babel-core');
 
 const fetch = require('node-fetch');
 const _ = require('lodash');
 const falafel = require('falafel');
 const prettyFormat = require('pretty-format');
 
-// const LOG_FILE = './log.txt';
-// fs.writeFileSync(LOG_FILE, '');
-// const log = (...msg) => fs.appendFileSync(
-//   LOG_FILE,
-//   msg.map(m => _.isString(m) ? m : prettyFormat(m)).join(' ') + '\n'
-// );
+const { traceLoops } = require('./loopTracer');
+
+const LOG_FILE = './log.txt';
+fs.writeFileSync(LOG_FILE, '');
+const log = (...msg) => fs.appendFileSync(
+  LOG_FILE,
+  msg.map(m => _.isString(m) ? m : prettyFormat(m)).join(' ') + '\n'
+);
 
 const event = (type, payload) => ({ type, payload });
 const Events = {
@@ -32,9 +35,20 @@ const Events = {
 
   InitTimeout: (id, callbackName) => event('InitTimeout', { id, callbackName }),
   BeforeTimeout: (id) => event('BeforeTimeout', { id }),
-}
 
-const postEvent = (event) => parentPort.postMessage(JSON.stringify(event));
+  UncaughtError: (error) => event('UncaughtError', {
+    name: error.name,
+    stack: error.stack,
+    message: error.message,
+  }),
+  EarlyTermination: (message) => event('EarlyTermination', { message }),
+};
+
+let events = [];
+const postEvent = (event) => {
+  events.push(event);
+  parentPort.postMessage(JSON.stringify(event));
+}
 
 // We only care about these async hook types:
 //   PROMISE, Timeout
@@ -118,6 +132,7 @@ const traceBlock = (code, fnName, start, end) => `{
 
 const jsSourceCode = workerData;
 
+// TODO: Convert all this to babel transform(s)
 // TODO: HANDLE GENERATORS/ASYNC-AWAIT
 const output = falafel(jsSourceCode, (node) => {
 
@@ -125,6 +140,7 @@ const output = falafel(jsSourceCode, (node) => {
   const isBlockStatement = node.type === 'BlockStatement';
   const isFunctionBody = functionDefinitionTypes.includes(parentType);
   const isArrowFnReturnType = arrowFnImplicitReturnTypesRegex.test(node.type);
+  const isArrowFunctionBody = parentType === 'ArrowFunctionExpression';
   const isArrowFn = node.type === 'ArrowFunctionExpression';
 
   if (isBlockStatement && isFunctionBody) {
@@ -134,7 +150,7 @@ const output = falafel(jsSourceCode, (node) => {
     const blockWithoutCurlies = block.substring(1, block.length - 1);
     node.update(traceBlock(blockWithoutCurlies, fnName, start, end))
   }
-  else if (isArrowFnReturnType && isFunctionBody) {
+  else if (isArrowFnReturnType && isArrowFunctionBody) {
     const { start, end } = node.parent;
     const fnName = (node.parent.id && node.parent.id.name) || 'anonymous';
     const block = node.source();
@@ -159,10 +175,12 @@ const output = falafel(jsSourceCode, (node) => {
       }
     }
   }
-  
+
 });
 
-const modifiedSource = output.toString();
+const modifiedSource = babel
+  .transform(output.toString(), { plugins: [traceLoops] })
+  .code;
 
 // TODO: Maybe change this name to avoid conflicts?
 const nextId = (() => {
@@ -173,6 +191,10 @@ const nextId = (() => {
 const arrToPrettyStr = (arr) =>
   arr.map(a => _.isString(a) ? a : prettyFormat(a)).join(' ') + '\n'
 
+const START_TIME = Date.now();
+const TIMEOUT_MILLIS = 5000;
+const EVENT_LIMIT = 500;
+
 const Tracer = {
   enterFunc: (id, name, start, end) => postEvent(Events.EnterFunction(id, name, start, end)),
   exitFunc: (id, name, start, end) => postEvent(Events.ExitFunction(id, name, start, end)),
@@ -180,7 +202,25 @@ const Tracer = {
   log: (...args) => postEvent(Events.ConsoleLog(arrToPrettyStr(args))),
   warn: (...args) => postEvent(Events.ConsoleWarn(arrToPrettyStr(args))),
   error: (...args) => postEvent(Events.ConsoleError(arrToPrettyStr(args))),
+  iterateLoop: () => {
+    const hasTimedOut = (Date.now() - START_TIME) > TIMEOUT_MILLIS;
+    const reachedEventLimit = events.length >= EVENT_LIMIT;
+    const shouldTerminate = reachedEventLimit || hasTimedOut;
+    if (shouldTerminate) {
+      postEvent(Events.EarlyTermination(hasTimedOut
+        ? `Terminated early: Timeout of ${TIMEOUT_MILLIS} millis exceeded.`
+        : `Termianted early: Event limit of ${EVENT_LIMIT} exceeded.`
+      ));
+      process.exit(1);
+    }
+  },
 };
+
+// E.g. call stack size exceeded errors...
+process.on('uncaughtException', (err) => {
+  postEvent(Events.UncaughtError(err));
+  process.exit(1);
+});
 
 const fn = new Function(
   'nextId',

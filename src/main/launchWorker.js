@@ -1,6 +1,6 @@
 const { Worker } = require('worker_threads');
 
-const WORKER_FILE = './src/worker.js';
+const WORKER_FILE = './src/worker/worker.js';
 
 const action = (type, payload) => JSON.stringify({ type, payload });
 const Messages = {
@@ -29,6 +29,8 @@ const launchWorker = (jsSourceCode, onEvent) => {
     console.log('Worker EXIT:', code)
     onEvent(Messages.Done(code));
   });
+
+  return worker;
 };
 
 module.exports = { launchWorker };

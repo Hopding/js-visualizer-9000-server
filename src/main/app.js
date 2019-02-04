@@ -15,21 +15,22 @@ wss.on('connection', (ws) => {
     console.log('Received:', message)
     const { type, payload } = JSON.parse(message);
 
-    // TODO: Implement support for a termination-message
     if (type === Messages.RunCode) {
       let events = [];
+      let isFinished = false;
 
-      launchWorker(payload, evtString => {
-        const evt = JSON.parse(evtString);
-        events.push(evt);
+      const worker = launchWorker(payload, evtString => {
+        if (!isFinished) {
+          const evt = JSON.parse(evtString);
+          events.push(evt);
 
-        if (evt.type === 'Done') {
-          const reducedEvents = reduceEvents(events);
-          console.log(reducedEvents.map(JSON.stringify))
-          ws.send(JSON.stringify(reducedEvents));
+          if (evt.type === 'Done') {
+            const reducedEvents = reduceEvents(events);
+            console.log(reducedEvents.map(JSON.stringify))
+            ws.send(JSON.stringify(reducedEvents));
+          }
         }
       });
-
     } else {
       console.error('Unknown message type:', type);
     }
