@@ -118,10 +118,8 @@ const traceBlock = (code, fnName, start, end) => `{
 
 const jsSourceCode = workerData;
 
-// TODO: HANDLE IMPLICIT RETURNS FROM ARROW FNS!
 // TODO: HANDLE GENERATORS/ASYNC-AWAIT
 const output = falafel(jsSourceCode, (node) => {
-  log('NODE TYPE:', node.type);
 
   const parentType = node.parent && node.parent.type;
   const isBlockStatement = node.type === 'BlockStatement';
@@ -161,6 +159,7 @@ const output = falafel(jsSourceCode, (node) => {
       }
     }
   }
+  
 });
 
 const modifiedSource = output.toString();
