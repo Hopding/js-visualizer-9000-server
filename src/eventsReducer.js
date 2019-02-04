@@ -3,6 +3,8 @@ const _ = require('lodash');
 const eventsReducer = (state, evt) => {
   const { type, payload } = evt;
 
+  if (type === 'UncaughtError') state.events.push(evt);
+
   if (type === 'ConsoleLog') state.events.push(evt);
   if (type === 'ConsoleWarn') state.events.push(evt);
   if (type === 'ConsoleError') state.events.push(evt);
