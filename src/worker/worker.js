@@ -117,6 +117,7 @@ const functionDefinitionTypes = [
 ];
 const arrowFnImplicitReturnTypesRegex = /Literal|Identifier|(\w)*Expression/;
 
+// Inspired by: http://alltom.com/pages/instrumenting-javascript/
 const traceBlock = (code, fnName, start, end) => `{
   const idWithExtensionToAvoidConflicts = nextId();
   Tracer.enterFunc(idWithExtensionToAvoidConflicts, '${fnName}', ${start}, ${end});
