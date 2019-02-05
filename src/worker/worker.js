@@ -3,6 +3,7 @@ const asyncHooks = require('async_hooks');
 const util = require('util');
 const fs = require('fs');
 const babel = require('babel-core');
+const { VM } = require('vm2');
 
 const fetch = require('node-fetch');
 const _ = require('lodash');
@@ -223,26 +224,21 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-const fn = new Function(
-  'nextId',
-  'Tracer',
-  'fetch',
-  'lodash',
-  '_',
-  modifiedSource,
-);
+const vm = new VM({
+  timeout: 6000,
+  sandbox: {
+    nextId,
+    Tracer,
+    fetch,
+    _,
+    lodash: _,
+    setTimeout,
+    console: {
+      log: Tracer.log,
+      warn: Tracer.warn,
+      error: Tracer.error,
+    },
+  },
+});
 
-const origConsoleLog = console.log;
-const origConsoleWarn = console.warn;
-const origConsoleError = console.error;
-console.log = Tracer.log;
-console.warn = Tracer.warn;
-console.error = Tracer.error;
-
-fn(
-  nextId,
-  Tracer,
-  fetch,
-  _,
-  _,
-);
+vm.run(modifiedSource);
