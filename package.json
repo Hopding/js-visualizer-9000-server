@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "engines": {
+    "node": "11.x"
+  },
+  "main": "index.js",
   "scripts": {
     "start": "node --experimental-worker index.js"
   },
