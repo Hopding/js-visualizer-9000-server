@@ -2,7 +2,8 @@ const WebSocket = require('ws');
 const { launchWorker } = require('./launchWorker');
 const { reduceEvents } = require('./eventsReducer');
 
-const port = 8080;
+// Heroku provides a PORT env var that we have to use
+const port = process.env.PORT || 8080;
 const wss = new WebSocket.Server({ port });
 console.log('Running server on port:', port);
 
