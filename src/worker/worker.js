@@ -38,9 +38,9 @@ const Events = {
   BeforeTimeout: (id) => event('BeforeTimeout', { id }),
 
   UncaughtError: (error) => event('UncaughtError', {
-    name: error.name,
-    stack: error.stack,
-    message: error.message,
+    name: (error || {}).name,
+    stack: (error || {}).stack,
+    message: (error || {}).message,
   }),
   EarlyTermination: (message) => event('EarlyTermination', { message }),
 };
@@ -153,11 +153,16 @@ const output = falafel(jsSourceCode, (node) => {
     node.update(traceBlock(blockWithoutCurlies, fnName, start, end))
   }
   else if (isArrowFnReturnType && isArrowFunctionBody) {
-    const { start, end } = node.parent;
-    const fnName = (node.parent.id && node.parent.id.name) || 'anonymous';
-    const block = node.source();
-    const returnedBlock = `return (${block});`;
-    node.update(traceBlock(returnedBlock, fnName, start, end))
+    const { start, end, params } = node.parent;
+
+    const isParamIdentifier = params.some(param => param === node);
+
+    if (!isParamIdentifier) {
+      const fnName = (node.parent.id && node.parent.id.name) || 'anonymous';
+      const block = node.source();
+      const returnedBlock = `return (${block});`;
+      node.update(traceBlock(returnedBlock, fnName, start, end))
+    }
   }
   else if (isArrowFn) {
     const body = node.source();
