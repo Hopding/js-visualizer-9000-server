@@ -1,6 +1,6 @@
 # JavaScript Visualizer 9000 Server
 
-Produces events for code submitted by https://jsv9000.app
+Produces events for code submitted by https://jsv9000.app. The repo for the client is [here](https://github.com/Hopding/js-visualizer-9000-server).
 
 For example, upon receiving this input code:
 
