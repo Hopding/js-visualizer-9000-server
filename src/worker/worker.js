@@ -34,6 +34,10 @@ const Events = {
   BeforePromise: (id) => event('BeforePromise', { id }),
   AfterPromise: (id) => event('AfterPromise', { id }),
 
+  InitMicrotask: (id, parentId) => event('InitMicrotask', { id, parentId }),
+  BeforeMicrotask: (id) => event('BeforeMicrotask', { id }),
+  AfterMicrotask: (id) => event('AfterMicrotask', { id }),
+
   InitTimeout: (id, callbackName) => event('InitTimeout', { id, callbackName }),
   BeforeTimeout: (id) => event('BeforeTimeout', { id }),
 
@@ -77,6 +81,9 @@ const init = (asyncId, type, triggerAsyncId, resource) => {
     const callbackName = resource._onTimeout.name || 'anonymous';
     postEvent(Events.InitTimeout(asyncId, callbackName));
   }
+  if (type === 'Microtask') {
+    postEvent(Events.InitMicrotask(asyncId, triggerAsyncId));
+  }
 }
 
 const before = (asyncId) => {
@@ -88,6 +95,9 @@ const before = (asyncId) => {
   if (resourceName === 'Timeout') {
     postEvent(Events.BeforeTimeout(asyncId));
   }
+  if (resourceName === 'AsyncResource') {
+    postEvent(Events.BeforeMicrotask(asyncId));
+  }
 }
 
 const after = (asyncId) => {
@@ -95,6 +105,9 @@ const after = (asyncId) => {
   const resourceName = (resource.constructor).name;
   if (resourceName === 'PromiseWrap') {
     postEvent(Events.AfterPromise(asyncId));
+  }
+  if (resourceName === 'AsyncResource') {
+    postEvent(Events.AfterMicrotask(asyncId));
   }
 }
 
@@ -238,6 +251,7 @@ const vm = new VM({
     _,
     lodash: _,
     setTimeout,
+    queueMicrotask,
     console: {
       log: Tracer.log,
       warn: Tracer.warn,
