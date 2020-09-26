@@ -14,6 +14,9 @@ const eventsReducer = (state, evt) => {
     if (state.prevEvt.type === 'BeforePromise') {
       state.events.push({ type: 'DequeueMicrotask', payload: {} });
     }
+    if (state.prevEvt.type === 'BeforeMicrotask') {
+      state.events.push({ type: 'DequeueMicrotask', payload: {} });
+    }
     state.events.push(evt);
   }
   if (type == 'ExitFunction') state.events.push(evt);
@@ -35,6 +38,22 @@ const eventsReducer = (state, evt) => {
   }
   if (type === 'BeforePromise') state.events.push(evt);
   if (type === 'AfterPromise') state.events.push(evt);
+
+  if (type === 'InitMicrotask') {
+    state.events.push(evt);
+
+    const microtaskInfo = state.parentsIdsOfMicrotasks
+      .find(({ id }) => id === payload.id);
+
+    if (microtaskInfo) {
+      state.events.push({
+        type: 'EnqueueMicrotask',
+        payload: { name: microtaskInfo.name }
+      });
+    }
+  }
+  if (type === 'BeforeMicrotask') state.events.push(evt);
+  if (type === 'AfterMicrotask') state.events.push(evt);
 
   if (type === 'InitTimeout') state.events.push(evt);
   if (type === 'BeforeTimeout') {
@@ -103,11 +122,39 @@ const reduceEvents = (events) => {
       name,
     }));
 
-  console.log({ resolvedPromiseIds, promisesWithInvokedCallbacksInfo, parentsIdsOfPromisesWithInvokedCallbacks });
+  const microtasksWithInvokedCallbacksInfo = events
+    .filter(({ type }) =>
+      [ 'InitMicrotask', 'BeforeMicrotask', 'AfterMicrotask', 'EnterFunction', 'ExitFunction' ].includes(type)
+    )
+    .map((evt, idx, arr) =>
+      evt.type === 'BeforeMicrotask' && (arr[idx + 1] || {}).type === 'EnterFunction'
+        ? [evt, arr[idx + 1]] : undefined
+    )
+    .filter(Boolean)
+    .map(([beforeMicrotaskEvt, enterFunctionEvt]) => ({
+      id: beforeMicrotaskEvt.payload.id,
+      name: enterFunctionEvt.payload.name
+    }));
+
+  const microtaskChildIdToParentId = {};
+  events
+    .filter(({ type }) => type === 'InitMicrotask')
+    .forEach(({ payload: { id, parentId } }) => {
+      microtaskChildIdToParentId[id] = parentId;
+    });
+
+  const parentsIdsOfMicrotasks = microtasksWithInvokedCallbacksInfo
+    .map(({ id: childId, name }) => ({
+      id: microtaskChildIdToParentId[childId],
+      name,
+    }));
+
+  console.log({ resolvedPromiseIds, promisesWithInvokedCallbacksInfo, parentsIdsOfPromisesWithInvokedCallbacks, parentsIdsOfMicrotasks });
 
   return events.reduce(eventsReducer, {
     events: [],
     parentsIdsOfPromisesWithInvokedCallbacks,
+    parentsIdsOfMicrotasks,
     prevEvt: {},
   }).events;
 };
