@@ -6,7 +6,6 @@
   "engines": {
     "node": "11.x"
   },
-  "main": "index.js",
   "scripts": {
     "start": "node --experimental-worker index.js"
   },

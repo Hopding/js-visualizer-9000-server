@@ -26,13 +26,14 @@ const eventsReducer = (state, evt) => {
   if (type === 'ResolvePromise') {
     state.events.push(evt);
 
-    const microtaskInfo = state.parentsIdsOfPromisesWithInvokedCallbacks
-      .find(({ id }) => id === payload.id);
+    const microtaskInfo = state.parentsIdsOfPromisesWithInvokedCallbacks.find(
+      ({ id }) => id === payload.id
+    );
 
     if (microtaskInfo) {
       state.events.push({
         type: 'EnqueueMicrotask',
-        payload: { name: microtaskInfo.name }
+        payload: { name: microtaskInfo.name },
       });
     }
   }
@@ -42,13 +43,14 @@ const eventsReducer = (state, evt) => {
   if (type === 'InitMicrotask') {
     state.events.push(evt);
 
-    const microtaskInfo = state.parentsIdsOfMicrotasks
-      .find(({ id }) => id === payload.id);
+    const microtaskInfo = state.parentsIdsOfMicrotasks.find(
+      ({ id }) => id === payload.id
+    );
 
     if (microtaskInfo) {
       state.events.push({
         type: 'EnqueueMicrotask',
-        payload: { name: microtaskInfo.name }
+        payload: { name: microtaskInfo.name },
       });
     }
   }
@@ -73,14 +75,15 @@ const reduceEvents = (events) => {
   // resolve multiple times. I don't know why this happens, but it screws things
   // up for the view layer, so we'll just take the last one ¯\_(ツ)_/¯
   events = _(events)
-  .reverse()
-  .uniqWith((aEvt, bEvt) =>
-    aEvt.type === 'ResolvePromise' &&
-    bEvt.type === 'ResolvePromise' &&
-    aEvt.payload.id === bEvt.payload.id
-  )
-  .reverse()
-  .value()
+    .reverse()
+    .uniqWith(
+      (aEvt, bEvt) =>
+        aEvt.type === 'ResolvePromise' &&
+        bEvt.type === 'ResolvePromise' &&
+        aEvt.payload.id === bEvt.payload.id
+    )
+    .reverse()
+    .value();
 
   // Before we reduce the events, we need to figure out when Microtasks
   // were enqueued.
@@ -97,17 +100,24 @@ const reduceEvents = (events) => {
 
   const promisesWithInvokedCallbacksInfo = events
     .filter(({ type }) =>
-      ['BeforePromise', 'EnterFunction', 'ExitFunction', 'ResolvePromise'].includes(type)
+      [
+        'BeforePromise',
+        'EnterFunction',
+        'ExitFunction',
+        'ResolvePromise',
+      ].includes(type)
     )
-    .map((evt, idx, arr) =>
-      evt.type === 'BeforePromise' && (arr[idx + 1] || {}).type === 'EnterFunction'
-        ? [evt, arr[idx + 1]] : undefined
-    )
+    .map((evt, idx, arr) => {
+      return evt.type === 'BeforePromise' &&
+        (arr[idx + 1] || {}).type === 'EnterFunction'
+        ? [evt, arr[idx + 1]]
+        : undefined;
+    })
     .filter(Boolean)
     .map(([beforePromiseEvt, enterFunctionEvt]) => ({
       id: beforePromiseEvt.payload.id,
-      name: enterFunctionEvt.payload.name
-    }))
+      name: enterFunctionEvt.payload.name,
+    }));
 
   const promiseChildIdToParentId = {};
   events
@@ -116,24 +126,33 @@ const reduceEvents = (events) => {
       promiseChildIdToParentId[id] = parentId;
     });
 
-  const parentsIdsOfPromisesWithInvokedCallbacks = promisesWithInvokedCallbacksInfo
-    .map(({ id: childId, name }) => ({
+  const parentsIdsOfPromisesWithInvokedCallbacks = promisesWithInvokedCallbacksInfo.map(
+    ({ id: childId, name }) => ({
       id: promiseChildIdToParentId[childId],
       name,
-    }));
+    })
+  );
 
   const microtasksWithInvokedCallbacksInfo = events
     .filter(({ type }) =>
-      [ 'InitMicrotask', 'BeforeMicrotask', 'AfterMicrotask', 'EnterFunction', 'ExitFunction' ].includes(type)
+      [
+        'InitMicrotask',
+        'BeforeMicrotask',
+        'AfterMicrotask',
+        'EnterFunction',
+        'ExitFunction',
+      ].includes(type)
     )
     .map((evt, idx, arr) =>
-      evt.type === 'BeforeMicrotask' && (arr[idx + 1] || {}).type === 'EnterFunction'
-        ? [evt, arr[idx + 1]] : undefined
+      evt.type === 'BeforeMicrotask' &&
+      (arr[idx + 1] || {}).type === 'EnterFunction'
+        ? [evt, arr[idx + 1]]
+        : undefined
     )
     .filter(Boolean)
     .map(([beforeMicrotaskEvt, enterFunctionEvt]) => ({
       id: beforeMicrotaskEvt.payload.id,
-      name: enterFunctionEvt.payload.name
+      name: enterFunctionEvt.payload.name,
     }));
 
   const microtaskChildIdToParentId = {};
@@ -143,13 +162,19 @@ const reduceEvents = (events) => {
       microtaskChildIdToParentId[id] = parentId;
     });
 
-  const parentsIdsOfMicrotasks = microtasksWithInvokedCallbacksInfo
-    .map(({ id: childId, name }) => ({
+  const parentsIdsOfMicrotasks = microtasksWithInvokedCallbacksInfo.map(
+    ({ id: childId, name }) => ({
       id: microtaskChildIdToParentId[childId],
       name,
-    }));
+    })
+  );
 
-  console.log({ resolvedPromiseIds, promisesWithInvokedCallbacksInfo, parentsIdsOfPromisesWithInvokedCallbacks, parentsIdsOfMicrotasks });
+  console.log({
+    resolvedPromiseIds,
+    promisesWithInvokedCallbacksInfo,
+    parentsIdsOfPromisesWithInvokedCallbacks,
+    parentsIdsOfMicrotasks,
+  });
 
   return events.reduce(eventsReducer, {
     events: [],

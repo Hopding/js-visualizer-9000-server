@@ -12,6 +12,7 @@ const prettyFormat = require('pretty-format');
 
 const { traceLoops } = require('./loopTracer');
 const { traceFunction } = require('./functionTracer');
+const { traceConsole } = require('./consoleTracer');
 
 const LOG_FILE = './log.txt';
 fs.writeFileSync(LOG_FILE, '');
@@ -60,38 +61,6 @@ const postEvent = (event) => {
   events.push(event);
   parentPort.postMessage(JSON.stringify(event));
 };
-
-// We only care about these async hook types:
-//   PROMISE, Timeout
-const ignoredAsyncHookTypes = [
-  'FSEVENTWRAP',
-  'FSREQCALLBACK',
-  'GETADDRINFOREQWRAP',
-  'GETNAMEINFOREQWRAP',
-  'HTTPPARSER',
-  'JSSTREAM',
-  'PIPECONNECTWRAP',
-  'PIPEWRAP',
-  'PROCESSWRAP',
-  'QUERYWRAP',
-  'SHUTDOWNWRAP',
-  'SIGNALWRAP',
-  'STATWATCHER',
-  'TCPCONNECTWRAP',
-  'TCPSERVERWRAP',
-  'TCPWRAP',
-  'TTYWRAP',
-  'UDPSENDWRAP',
-  'UDPWRAP',
-  'WRITEWRAP',
-  'ZLIB',
-  'SSLCONNECTION',
-  'PBKDF2REQUEST',
-  'RANDOMBYTESREQUEST',
-  'TLSWRAP',
-  'DNSCHANNEL',
-];
-const isIgnoredHookType = (type) => ignoredAsyncHookTypes.includes(type);
 
 const eid = asyncHooks.executionAsyncId();
 const tid = asyncHooks.triggerAsyncId();
@@ -150,23 +119,9 @@ asyncHooks
   .createHook({ init, before, after, destroy, promiseResolve })
   .enable();
 
-const functionDefinitionTypes = [
-  'FunctionDeclaration',
-  'FunctionExpression',
-  'ArrowFunctionExpression',
-];
-const arrowFnImplicitReturnTypesRegex = /Literal|Identifier|(\w)*Expression/;
-
 const jsSourceCode = workerData;
 
-const output = babel.transform(jsSourceCode.toString(), {
-  plugins: [traceFunction],
-}).code;
-
-const modifiedSource = babel.transform(output.toString(), {
-  plugins: [traceLoops],
-}).code;
-
+// console.log(modifiedSource);
 // TODO: Maybe change this name to avoid conflicts?
 const nextId = (() => {
   let id = 0;
@@ -187,7 +142,11 @@ const Tracer = {
     postEvent(Events.ExitFunction(id, name, start, end)),
   errorFunc: (message, id, name, start, end) =>
     postEvent(Events.ErrorFunction(message, id, name, start, end)),
-  log: (...args) => postEvent(Events.ConsoleLog(arrToPrettyStr(args))),
+  log: (...args) => {
+    // postEvent(Events.EnterFunction(1, 'console.log', 1, 1));
+    postEvent(Events.ConsoleLog(arrToPrettyStr(args)));
+    // postEvent(Events.ExitFunction(1, 'console.log', 1, 1));
+  },
   warn: (...args) => postEvent(Events.ConsoleWarn(arrToPrettyStr(args))),
   error: (...args) => postEvent(Events.ConsoleError(arrToPrettyStr(args))),
   iterateLoop: () => {
@@ -231,4 +190,22 @@ const vm = new VM({
   },
 });
 
+// const output = babel.transform(jsSourceCode.toString(), {
+//   plugins: [traceFunction],
+// }).code;
+
+// let modifiedSource = babel.transform(output.toString(), {
+//   plugins: [traceLoops],
+// }).code;
+
+// modifiedSource = babel.transform(output.toString(), {
+//   plugins: [traceConsole],
+// }).code;
+let modifiedSource;
+
+modifiedSource = babel.transform(jsSourceCode.toString(), {
+  plugins: [traceConsole, traceFunction, traceLoops],
+}).code;
+
+// console.log(modifiedSource);
 vm.run(modifiedSource);

@@ -13,21 +13,21 @@ const Messages = {
 
 wss.on('connection', (ws) => {
   ws.on('message', (message) => {
-    console.log('Received:', message)
+    console.log('Received:', message);
     const { type, payload } = JSON.parse(message);
 
     if (type === Messages.RunCode) {
       let events = [];
       let isFinished = false;
 
-      const worker = launchWorker(payload, evtString => {
+      const worker = launchWorker(payload, (evtString) => {
         if (!isFinished) {
           const evt = JSON.parse(evtString);
           events.push(evt);
 
           if (evt.type === 'Done') {
             const reducedEvents = reduceEvents(events);
-            console.log(reducedEvents.map(JSON.stringify))
+            console.log(reducedEvents.map(JSON.stringify));
             ws.send(JSON.stringify(reducedEvents));
           }
         }

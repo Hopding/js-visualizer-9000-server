@@ -29,6 +29,40 @@ const traceFunction = (babel) => {
     ]);
   };
 
+  const transformConsoleInFunc = (node, oriBodyArray, idx) => {
+    const callee = node.expression.callee;
+    const object = callee.object.name;
+
+    const start = callee.start;
+    const end = callee.end;
+    console.log(node.expression.callee);
+    const property = callee.property.name;
+    fnName = `${object}.${property}`;
+    // Check type of console call expression
+    const nextId = t.callExpression(t.identifier('nextId'), []);
+
+    // Make Tracer Function to instrument
+    const tracerEnter = makeTracerFunc('enterFunc', nextId, fnName, start, end);
+    const tracerExit = makeTracerFunc('exitFunc', nextId, fnName, start, end);
+
+    // Insert the tracer by mutating original Array
+    oriBodyArray.splice(idx, 0, tracerEnter);
+    oriBodyArray.splice(idx + 2, 0, tracerExit);
+  };
+
+  function checker(node) {
+    try {
+      let res =
+        node['expression']['callee']['object']['name'] &&
+        node['expression']['callee']['object']['name'] == 'console' &&
+        node['expression']['callee']['property']['name'];
+      return res;
+    } catch (error) {
+      console.log('error here');
+      return false;
+    }
+  }
+
   const transformFunction = (path) => {
     let start, end, fnName, oriBody;
     start = path.node.start;
@@ -62,7 +96,20 @@ const traceFunction = (babel) => {
     const finallyBlockStatement = t.blockStatement([finallyExp]);
 
     // Make a copy of the existing node.body to avoid circular injection via the push container
+
     const oriCodeBlockStatement = JSON.parse(JSON.stringify(path.node.body));
+
+    for (let i = 0; i < oriCodeBlockStatement.body.length; i++) {
+      if (checker(oriCodeBlockStatement.body[i])) {
+        transformConsoleInFunc(
+          oriCodeBlockStatement.body[i],
+          oriCodeBlockStatement.body,
+          i
+        );
+        i = i + 2;
+      } else {
+      }
+    }
 
     // Push the Tracer Enter Func to run before original code
     oriCodeBlockStatement.body.unshift(tracerEnter);
