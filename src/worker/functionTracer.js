@@ -29,6 +29,26 @@ const traceFunction = (babel) => {
     ]);
   };
 
+  const makeTracerErrorFunc = (type, nextId, fnName, start, end) => {
+    const tracerEnterFunc = t.memberExpression(
+      t.identifier('Tracer'),
+      t.identifier(`${type}`)
+    );
+
+    const errorMessage = t.memberExpression(
+      t.identifier('e'),
+      t.identifier(`message`)
+    );
+
+    return t.callExpression(tracerEnterFunc, [
+      errorMessage,
+      nextId,
+      t.stringLiteral(`${fnName}`),
+      t.numericLiteral(start),
+      t.numericLiteral(end),
+    ]);
+  };
+
   const transformConsoleInFunc = (node, oriBodyArray, idx) => {
     const callee = node.expression.callee;
     const object = callee.object.name;
@@ -83,12 +103,20 @@ const traceFunction = (babel) => {
 
     // Make Tracer Function to instrument
     const tracerEnter = makeTracerFunc('enterFunc', nextId, fnName, start, end);
-    const tracerError = makeTracerFunc('errorFunc', nextId, fnName, start, end);
+    const tracerError = makeTracerErrorFunc(
+      'errorFunc',
+      nextId,
+      fnName,
+      start,
+      end
+    );
     const tracerExit = makeTracerFunc('exitFunc', nextId, fnName, start, end);
+    // Rethrow Error to ensure original try catch still get the thrown error
+    const reThrowError = t.throwStatement(t.identifier('e'));
 
     // Make Catch Block with tracerError
     const catchExp = t.expressionStatement(tracerError);
-    const catchBlockStatement = t.blockStatement([catchExp]);
+    const catchBlockStatement = t.blockStatement([catchExp, reThrowError]);
     const catchBlock = t.catchClause(t.identifier('e'), catchBlockStatement);
 
     // Make Finally Block with tracerExit
