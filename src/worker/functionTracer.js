@@ -12,7 +12,7 @@
 //     Tracer.exitFunc(idWithExtensionToAvoidConflicts, '${fnName}', ${start}, ${end});
 //   }
 // }`;
-
+const _ = require('lodash');
 const traceFunction = (babel) => {
   const t = babel.types;
 
@@ -148,6 +148,14 @@ const traceFunction = (babel) => {
       catchBlock,
       finallyBlockStatement
     );
+
+    if (
+      t.isTryStatement(path.node.body.body[0]) &&
+      t.isBlockStatement(path.node.body.body[0].block)
+    ) {
+      console.log(_.isEqual(path.node.body.body[0].block.body[0], tracerEnter));
+      return;
+    }
 
     // Clear the existing body
     oriBody.length = 0;
